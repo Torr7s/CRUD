@@ -1,19 +1,36 @@
-const express = require("express");
+const express = require('express');
+const { v4: uuid } = require('uuid');
 
-const { v4: uuid } = require("uuid");
+const app = express()
 
-const app = express();
+app.use(express.json())
 
-app.use(express.json());
+const repositories = []
 
-const repositories = [];
+function checkRepositoryExists(_request, _response, _next) {
+  const { id } = _request.params
 
-app.get("/repositories", (request, response) => {
-  return response.json(repositories);
-});
+  const repositoryIndex = repositories.findIndex((repository) => repository.id === id)
 
-app.post("/repositories", (request, response) => {
-  const { title, url, techs } = request.body
+  if (repositoryIndex === -1) {
+    return _response
+      .status(404)
+      .json({
+        error: 'Repository does not exists!'
+      })
+  }
+
+  _request.repo = repositoryIndex
+
+  return _next()
+}
+
+app.get('/repositories', (_request, _response) => {
+  return _response.json(repositories)
+})
+
+app.post('/repositories', (_request, _response) => {
+  const { title, url, techs } = _request.body
 
   const repository = {
     id: uuid(),
@@ -21,54 +38,47 @@ app.post("/repositories", (request, response) => {
     url,
     techs,
     likes: 0
-  };
-
-  return response.json(repository);
-});
-
-app.put("/repositories/:id", (request, response) => {
-  const { id } = request.params;
-  const updatedRepository = request.body;
-
-  repositoryIndex = repositories.findindex(repository => repository.id === id);
-
-  if (repositoryIndex < 0) {
-    return response.status(404).json({ error: "Repository not found" });
   }
 
-  const repository = { ...repositories[repositoryIndex], ...updatedRepository };
+  repositories.push(repository)
 
-  repositories[repositoryIndex] = repository;
+  return _response.status(201).json(repository)
+})
 
-  return response.json(repository);
-});
+app.put('/repositories/:id', checkRepositoryExists, (_request, _response) => {
+  const { repo } = _request
+  const repositoryData = _request.body
 
-app.delete("/repositories/:id", (request, response) => {
-  const { id } = request.params;
-
-  repositoryIndex = repositories.findIndex(repository => repository.id === id);
-
-  if (repositoryIndex > 0) {
-    return response.status(404).json({ error: "Repository not found" });
+  for (const property in repositoryData) {
+    if (property === 'likes') {
+      repositoryData['likes'] = 0
+    }
   }
 
-  repositories.splice(repositoryIndex, 1);
-
-  return response.status(204).send();
-});
-
-app.post("/repositories/:id/like", (request, response) => {
-  const { id } = request.params;
-
-  repositoryIndex = repositories.findIndex(repository => repository.id === id);
-
-  if (repositoryIndex < 0) {
-    return response.status(404).json({ error: "Repository not found" });
+  const repository = {
+    ...repositories[repo],
+    ...repositoryData
   }
 
-  const likes = ++repositories[repositoryIndex].likes;
+  repositories[repo] = repository
 
-  return response.json('likes');
-});
+  return _response.json(repository)
+})
 
-module.exports = app;
+app.delete('/repositories/:id', checkRepositoryExists, (_request, _response) => {
+  const { repo } = _request
+
+  repositories.splice(repo, 1)
+
+  return _response.status(204).send()
+})
+
+app.post('/repositories/:id/like', checkRepositoryExists, (_request, _response) => {
+  const { repo } = _request
+
+  const likes = ++repositories[repo].likes
+
+  return _response.json({ likes })
+})
+
+module.exports = app
